@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Packing Line Scanner</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#1a1a2e;min-height:100vh}
+.app{max-width:500px;margin:0 auto;padding:1rem}
+.header{text-align:center;padding:1.25rem 0 .75rem}
+.logo{width:54px;height:54px;background:#1a73e8;border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 10px}
+.logo svg{width:26px;height:26px;fill:none;stroke:#fff;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+h1{font-size:19px;font-weight:700;color:#1a1a2e}
+.subtitle{font-size:12px;color:#888;margin-top:3px}
+.tabs{display:flex;background:#fff;border-radius:12px;padding:4px;margin-bottom:14px;gap:4px;border:1px solid #eee}
+.tab{flex:1;padding:8px;text-align:center;font-size:13px;font-weight:600;border-radius:9px;cursor:pointer;color:#888;border:none;background:none}
+.tab.active{background:#1a73e8;color:#fff}
+.page{display:none}.page.active{display:block}
+.progress{display:flex;gap:8px;margin:10px 0}
+.prog-seg{flex:1;height:4px;background:#ddd;border-radius:2px;transition:background .3s}
+.prog-seg.done{background:#34a853}.prog-seg.waiting{background:#1a73e8;animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+.status-bar{background:#e8f0fe;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#1a73e8;font-weight:600;display:flex;align-items:center;gap:8px;transition:all .3s}
+.pulse{width:8px;height:8px;background:#1a73e8;border-radius:50%;flex-shrink:0;animation:pulse 1.2s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+.scan-cards{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
+.scan-card{background:#fff;border-radius:14px;padding:14px 16px;display:flex;align-items:flex-start;gap:12px;border:1.5px solid #eee;transition:all .25s}
+.scan-card.scanned{border-color:#c8e6c9;background:#fafffe}
+.step-badge{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;margin-top:1px}
+.step-badge.wait{background:#f0f0f0;color:#aaa}
+.step-badge.ok{background:#e8f5e9;color:#34a853;font-size:17px}
+.card-info{flex:1;min-width:0}
+.card-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#aaa;margin-bottom:3px}
+.card-value{font-size:12px;font-weight:500;color:#444;word-break:break-all;line-height:1.4}
+.card-value.placeholder{color:#ccc;font-style:italic;font-weight:400}
+.card-model{font-size:12px;color:#1a73e8;margin-top:3px;font-weight:700}
+.input-wrap{background:#fff;border-radius:14px;padding:14px;border:1.5px solid #1a73e8;margin-bottom:12px}
+.input-hint{font-size:12px;font-weight:600;color:#1a73e8;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.input-wrap input{width:100%;padding:11px 13px;border:1.5px solid #e0e0e0;border-radius:9px;font-size:15px;outline:none;background:#fafafa;color:#1a1a2e;-webkit-appearance:none}
+.input-wrap input:focus{border-color:#1a73e8;background:#fff}
+.cam-btn{width:100%;padding:11px;margin-top:10px;background:#f0f4ff;color:#1a73e8;border:1.5px solid #c5d8ff;border-radius:9px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
+.cam-btn:active{background:#dce8ff}
+.cam-btn svg{width:18px;height:18px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.result{border-radius:16px;padding:24px;text-align:center;margin-bottom:12px;display:none}
+.result.ok{background:#e8f5e9;border:2px solid #34a853}
+.result.ng{background:#fce8e6;border:2px solid #ea4335}
+.result-icon{font-size:48px;margin-bottom:8px}
+.result-verdict{font-size:42px;font-weight:800;letter-spacing:-1px}
+.result.ok .result-verdict{color:#1b5e20}
+.result.ng .result-verdict{color:#b71c1c}
+.result-model{font-size:14px;font-weight:700;margin-top:6px}
+.result.ok .result-model{color:#2e7d32}
+.result.ng .result-model{color:#b71c1c}
+.result-msg{font-size:13px;margin-top:8px;line-height:1.6}
+.result.ok .result-msg{color:#2e7d32}
+.result.ng .result-msg{color:#c62828}
+.ng-issues{list-style:none;margin-top:8px;padding:0;text-align:right}
+.ng-issues li{font-size:13px;padding:4px 0;border-bottom:1px solid rgba(0,0,0,.05)}
+.ng-issues li::before{content:"⚠ "}
+.reset-btn{width:100%;padding:14px;background:#1a73e8;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;display:none;margin-bottom:16px}
+.reset-btn:active{background:#1558b0}
+.admin-section{background:#fff;border-radius:14px;padding:16px;margin-bottom:12px;border:1px solid #eee}
+.admin-section h3{font-size:14px;font-weight:700;color:#1a1a2e;margin-bottom:12px}
+.form-group{margin-bottom:10px}
+.form-group label{font-size:12px;font-weight:600;color:#666;display:block;margin-bottom:4px}
+.form-group input{width:100%;padding:10px 12px;border:1.5px solid #e0e0e0;border-radius:9px;font-size:14px;outline:none;-webkit-appearance:none}
+.form-group input:focus{border-color:#1a73e8}
+.add-btn{width:100%;padding:12px;background:#34a853;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer}
+.del-btn{background:#ea4335;color:#fff;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:13px}
+.db-table-wrap{overflow-x:auto;max-height:300px;overflow-y:auto;margin-top:8px}
+table{width:100%;border-collapse:collapse;font-size:11px}
+th{background:#f8f9fa;padding:8px;text-align:right;font-weight:700;color:#555;border-bottom:2px solid #eee;position:sticky;top:0}
+td{padding:6px 8px;border-bottom:1px solid #f0f0f0;color:#333;word-break:break-all}
+tr:hover td{background:#f8fbff}
+.db-count{font-size:12px;color:#888;margin-bottom:8px}
+.msg-box{padding:10px 14px;border-radius:9px;font-size:13px;font-weight:600;text-align:center;margin-top:10px;display:none}
+.msg-box.success{background:#e8f5e9;color:#2e7d32}
+.msg-box.error{background:#fce8e6;color:#c62828}
+.lock-screen{background:#fff;border-radius:14px;padding:24px;text-align:center;border:1px solid #eee}
+.lock-icon{font-size:40px;margin-bottom:10px}
+.lock-screen h3{font-size:15px;font-weight:700;margin-bottom:6px}
+.lock-screen p{font-size:12px;color:#888;margin-bottom:14px}
+.lock-screen input{width:100%;padding:11px;border:1.5px solid #e0e0e0;border-radius:9px;font-size:15px;text-align:center;outline:none;letter-spacing:4px;-webkit-appearance:none;margin-bottom:10px}
+.lock-screen input:focus{border-color:#1a73e8}
+.unlock-btn{width:100%;padding:12px;background:#1a73e8;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer}
+.search-wrap{margin-bottom:10px}
+.search-wrap input{width:100%;padding:9px 12px;border:1.5px solid #e0e0e0;border-radius:9px;font-size:13px;outline:none}
+.search-wrap input:focus{border-color:#1a73e8}
+.cam-overlay{display:none;position:fixed;inset:0;background:#000;z-index:999;flex-direction:column}
+.cam-overlay.open{display:flex}
+.cam-top{padding:14px 16px;display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,.6);flex-shrink:0}
+.cam-top-title{color:#fff;font-size:14px;font-weight:600}
+.cam-close-btn{background:rgba(255,255,255,.15);border:none;color:#fff;width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.cam-video-area{flex:1;position:relative;overflow:hidden}
+#camVideo{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+.cam-viewfinder{position:absolute;width:70%;max-width:280px;aspect-ratio:1;border:2px solid rgba(255,255,255,.6);border-radius:14px;box-shadow:0 0 0 9999px rgba(0,0,0,.55);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
+.scan-line{position:absolute;left:50%;transform:translateX(-50%);width:62%;height:2px;background:linear-gradient(90deg,transparent,#1a73e8,transparent);animation:scanline 2s ease-in-out infinite}
+@keyframes scanline{0%,100%{top:20%}50%{top:80%}}
+.cam-bottom{padding:14px;text-align:center;color:rgba(255,255,255,.75);font-size:13px;flex-shrink:0;background:rgba(0,0,0,.6)}
+.footer{text-align:center;font-size:11px;color:#bbb;padding-bottom:1.5rem}
+.warn-toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#ff6d00;color:#fff;padding:10px 20px;border-radius:24px;font-size:13px;font-weight:600;z-index:9999;display:none;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.2)}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="logo">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h2v2h-2z"/><path d="M18 14h3v2h-3z"/><path d="M14 18h2v3h-2z"/><path d="M18 18h3v3h-3z"/></svg>
+    </div>
+    <h1>Packing Line Scanner</h1>
+    <p class="subtitle">OQC — Label Verification v4.1</p>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('scanner')">🔍 Scanner</button>
+    <button class="tab" onclick="switchTab('admin')">⚙️ Admin</button>
+  </div>
+
+  <div class="page active" id="page-scanner">
+    <div class="progress">
+      <div class="prog-seg waiting" id="ps0"></div>
+      <div class="prog-seg" id="ps1"></div>
+      <div class="prog-seg" id="ps2"></div>
+    </div>
+    <div class="status-bar" id="statusBar">
+      <div class="pulse"></div>
+      <span id="statusText">جاهز — سكان أي من الاستيكرات</span>
+    </div>
+    <div class="scan-cards">
+      <div class="scan-card" id="card0">
+        <div class="step-badge wait" id="badge0">1</div>
+        <div class="card-info">
+          <div class="card-label">Scan 1 — Serial Number Barcode</div>
+          <div class="card-value placeholder" id="val0">في انتظار السكان...</div>
+          <div class="card-model" id="mod0"></div>
+        </div>
+      </div>
+      <div class="scan-card" id="card1">
+        <div class="step-badge wait" id="badge1">2</div>
+        <div class="card-info">
+          <div class="card-label" id="card1label">Scan 2 — Carton Label Barcode</div>
+          <div class="card-value placeholder" id="val1">في انتظار السكان...</div>
+          <div class="card-model" id="mod1"></div>
+        </div>
+      </div>
+      <div class="scan-card" id="card2">
+        <div class="step-badge wait" id="badge2">3</div>
+        <div class="card-info">
+          <div class="card-label" id="card2label">Scan 3 — بطاقة الطاقة QR</div>
+          <div class="card-value placeholder" id="val2">في انتظار السكان...</div>
+          <div class="card-model" id="mod2"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-wrap" id="inputWrap">
+      <div class="input-hint">
+        <div class="pulse"></div>
+        <span>سكان أي استيكر بأي ترتيب</span>
+      </div>
+      <input type="text" id="scanInput" placeholder="سكان هنا..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <button class="cam-btn" onclick="openCamera()">
+        <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        سكان بالكاميرا
+      </button>
+    </div>
+
+    <div class="result" id="resultBox">
+      <div class="result-icon" id="resultIcon"></div>
+      <div class="result-verdict" id="resultVerdict"></div>
+      <div class="result-model" id="resultModel"></div>
+      <div class="result-msg" id="resultMsg"></div>
+    </div>
+    <button class="reset-btn" id="resetBtn" onclick="resetAll()">↺ &nbsp; سكان وحدة جديدة</button>
+    <div class="footer">OQC Packing Line — v4.3 — Offline</div>
+  </div>
+
+  <div class="page" id="page-admin">
+    <div id="lockScreen" class="lock-screen">
+      <div class="lock-icon">🔒</div>
+      <h3>Admin Panel</h3>
+      <p>ادخل كلمة السر للوصول</p>
+      <input type="password" id="adminPass" placeholder="••••••" onkeydown="if(event.key==='Enter')checkPass()"/>
+      <button class="unlock-btn" onclick="checkPass()">دخول</button>
+      <div class="msg-box error" id="passError">كلمة السر غلط!</div>
+    </div>
+    <div id="adminContent" style="display:none">
+      <div class="admin-section">
+        <h3>➕ إضافة موديل جديد</h3>
+        <div class="form-group"><label>SN Prefix — أول 11 خانة من السيريال (مثال: 517 + 3107998L)</label><input type="text" id="newSN" placeholder="مثال: 5173107998L" autocomplete="off" autocapitalize="off"/></div>
+        <div class="form-group"><label>Model Name</label><input type="text" id="newModel" placeholder="مثال: MDRU528FEN46" autocomplete="off"/></div>
+        <div class="form-group"><label>Carton Barcode (Scan 2)</label><input type="text" id="newCarton" placeholder="مثال: 16031000B14993" autocomplete="off"/></div>
+        <div class="form-group"><label>EOS URL (Scan 3) — اختياري</label><input type="text" id="newEOS" placeholder="https://eos.org.eg/..." autocomplete="off"/></div>
+        <button class="add-btn" onclick="addModel()">✓ إضافة للداتا بيز</button>
+        <div class="msg-box" id="addMsg"></div>
+      </div>
+      <div class="admin-section">
+        <h3>📋 الداتا بيز — <span id="dbCount"></span></h3>
+        <div id="dbSyncStatus" style="font-size:12px;color:#888;margin-bottom:8px"></div>
+        <div class="search-wrap"><input type="text" id="searchInput" placeholder="بحث عن SN أو موديل أو كارتون..." oninput="renderTable()"/></div>
+        <div class="db-table-wrap">
+          <table><thead><tr><th>#</th><th>SN Prefix</th><th>Model</th><th>Carton</th><th>EOS</th><th></th></tr></thead>
+          <tbody id="dbTableBody"></tbody></table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="warn-toast" id="warnToast"></div>
+
+<div class="cam-overlay" id="camOverlay">
+  <div class="cam-top"><span class="cam-top-title">سكان الكود بالكاميرا</span><button class="cam-close-btn" onclick="closeCamera()">✕</button></div>
+  <div class="cam-video-area"><video id="camVideo" autoplay playsinline muted></video><div class="cam-viewfinder"></div><div class="scan-line"></div></div>
+  <div class="cam-bottom">وجّه الكاميرا على الكود — سيُقرأ تلقائياً</div>
+</div>
+
+<script>
+
+
+// Google Sheets backend
+const API_URL = 'https://script.google.com/macros/s/AKfycbzXOHztzPJYVo0-CKwum9UyifxwBDL1EXTn6mD2xBkGHUD_0vdpxUtOv54DGSYXk2DjrQ/exec';
+
+// Database of registered models (loaded from Google Sheet)
+let DB = [];
+let dbLoaded = false;
+let dbLoadError = false;
+
+async function loadDB() {
+  try {
+    const res = await fetch(API_URL);
+    const json = await res.json();
+    if (json.ok) {
+      DB = json.data;
+      dbLoaded = true;
+      dbLoadError = false;
+    } else {
+      dbLoadError = true;
+    }
+  } catch (e) {
+    dbLoadError = true;
+  }
+  buildMaps();
+  if (typeof renderTable === 'function') renderTable();
+  updateDBStatus();
+}
+
+function updateDBStatus() {
+  const el = document.getElementById('dbSyncStatus');
+  if (!el) return;
+  if (dbLoadError) {
+    el.textContent = '⚠ فشل الاتصال بالداتا بيز — تحقق من الإنترنت';
+    el.style.color = '#ea4335';
+  } else if (dbLoaded) {
+    el.textContent = '✅ متصل بالداتا بيز (Google Sheet)';
+    el.style.color = '#34a853';
+  } else {
+    el.textContent = '⏳ جاري تحميل الداتا بيز...';
+    el.style.color = '#888';
+  }
+}
+
+async function saveModelToSheet(row) {
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'add', row })
+    });
+    const json = await res.json();
+    return json.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function deleteModelFromSheet(sn, carton) {
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'delete', sn, carton })
+    });
+    const json = await res.json();
+    return json.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+// Build maps
+let snMap = {}, cartonMap = {}, eosMap = {};
+
+function buildMaps() {
+  snMap = {}; cartonMap = {}; eosMap = {};
+  DB.forEach(row => {
+    const sn      = (row[0]||'').trim();
+    const carton  = (row[1]||'').trim();
+    const eos     = (row[2]||'NA').trim();
+    const model   = (row[3]||'').trim();
+    const rec     = { sn, carton, eos, model };
+
+    // SN prefix map
+    if (sn) { if (!snMap[sn]) snMap[sn] = []; snMap[sn].push(rec); }
+
+    // Carton map — supports "MAIN/ALT" format and plain codes
+    // e.g. "5414529018920/000026" → register both keys
+    if (carton && carton !== 'NA' && !carton.startsWith('http')) {
+      if (carton.includes('/')) {
+        const parts = carton.split('/');
+        const main = parts[0].trim();
+        const alt  = parts[1].trim();
+        if (main) cartonMap[main] = rec;
+        if (alt)  cartonMap[alt]  = rec;
+      } else {
+        cartonMap[carton] = rec;
+      }
+    }
+
+    // EOS map
+    if (eos && eos !== 'NA' && eos.startsWith('http')) eosMap[eos] = rec;
+  });
+}
+
+// Find SN record(s) by prefix (any length match). Returns recs[] of all records sharing that prefix.
+function findBySN(val) {
+  let bestKey = null, bestLen = 0;
+  for (const key of Object.keys(snMap)) {
+    if (val.startsWith(key) && key.length > bestLen) {
+      bestKey = key; bestLen = key.length;
+    }
+  }
+  if (!bestKey) return null;
+  const recs = snMap[bestKey];
+  return { slot: 'sn', rec: recs[0], recs };
+}
+
+function findByCarton(val) {
+  return cartonMap[val] ? { slot: 'carton', rec: cartonMap[val] } : null;
+}
+
+function findByEOS(val) {
+  if (!val.startsWith('http')) return null;
+  // Extract product ID (last numeric segment in URL, e.g. .../productDetails/3916 -> 3916)
+  const getId = (url) => {
+    const m = url.match(/(\d+)\/?$/);
+    return m ? m[1] : null;
+  };
+  const valId = getId(val);
+  let key = null;
+  if (valId) {
+    key = Object.keys(eosMap).find(k => getId(k) === valId);
+  }
+  if (!key) {
+    key = Object.keys(eosMap).find(k => val.includes(k) || k.includes(val));
+  }
+  return key ? { slot: 'eos', rec: eosMap[key] } : { slot: 'eos', rec: null };
+}
+
+// State
+let scanned = { sn: null, carton: null, eos: null };
+let records = { sn: null, carton: null, eos: null };
+let snCandidates = null;
+let scanCount = 0;
+let eosRequired    = true;
+let cartonRequired = true;
+let cameraStream = null, animFrameId = null;
+
+function skipCartonCard() {
+  cartonRequired = false;
+  const card = document.getElementById('card1');
+  card.className = 'scan-card scanned';
+  card.style.opacity = '0.6';
+  document.getElementById('badge1').className = 'step-badge ok';
+  document.getElementById('badge1').textContent = '—';
+  const v = document.getElementById('val1');
+  v.className = 'card-value';
+  v.textContent = 'غير مطلوب لهذا الموديل (N/A)';
+  v.style.color = '#aaa';
+  document.getElementById('ps1').className = 'prog-seg done';
+  document.getElementById('ps1').style.background = '#bbb';
+}
+
+// Mark EOS card as skipped (N/A) in UI
+function skipEOSCard() {
+  eosRequired = false;
+  const card = document.getElementById('card2');
+  card.className = 'scan-card scanned';
+  card.style.opacity = '0.6';
+  document.getElementById('badge2').className = 'step-badge ok';
+  document.getElementById('badge2').textContent = '—';
+  document.getElementById('card2label').textContent = 'Scan 3 — بطاقة الطاقة QR';
+  const v = document.getElementById('val2');
+  v.className = 'card-value';
+  v.textContent = 'غير مطلوب لهذا الموديل (N/A)';
+  v.style.color = '#aaa';
+  document.getElementById('ps2').className = 'prog-seg done';
+  document.getElementById('ps2').style.background = '#bbb';
+}
+
+function requiredTotal() {
+  return (cartonRequired ? 1 : 0) + (eosRequired ? 1 : 0) + 1; // SN always required
+}
+
+function handleScan(raw) {
+  const val = raw.trim().replace(/[\r\n\t]/g, '');
+  if (!val || scanCount >= requiredTotal()) return;
+
+  // Try to identify
+  let found = findByEOS(val) || findBySN(val) || findByCarton(val);
+
+  if (!found) {
+    showToast('⚠ الكود غير موجود في الداتا بيز');
+    document.getElementById('scanInput').value = '';
+    return;
+  }
+
+  const slot = found.slot;
+
+  // Block carton scan if N/A
+  if (slot === 'carton' && !cartonRequired) {
+    showToast('⚠ هذا الموديل ليس له كارتونة مسجلة');
+    document.getElementById('scanInput').value = '';
+    return;
+  }
+
+  // Block EOS scan if N/A
+  if (slot === 'eos' && !eosRequired) {
+    showToast('⚠ هذا الموديل ليس له بطاقة طاقة مسجلة');
+    document.getElementById('scanInput').value = '';
+    return;
+  }
+
+  // Already scanned?
+  if (scanned[slot]) {
+    showToast('⚠ هذا النوع تم سكانه بالفعل');
+    document.getElementById('scanInput').value = '';
+    return;
+  }
+
+  scanned[slot] = val;
+  records[slot] = found.rec;
+  if (slot === 'sn' && found.recs) snCandidates = found.recs;
+  scanCount++;
+
+  // Update UI for scanned card
+  const cardIdx = { sn: 0, carton: 1, eos: 2 }[slot];
+  const modelName = found.rec ? found.rec.model : '';
+  document.getElementById('card' + cardIdx).className = 'scan-card scanned';
+  document.getElementById('badge' + cardIdx).className = 'step-badge ok';
+  document.getElementById('badge' + cardIdx).textContent = '✓';
+  const v = document.getElementById('val' + cardIdx);
+  v.className = 'card-value';
+  v.textContent = val.length > 45 ? val.substring(0, 43) + '...' : val;
+  if (modelName) document.getElementById('mod' + cardIdx).textContent = '🏷 ' + modelName;
+  document.getElementById('ps' + cardIdx).className = 'prog-seg done';
+
+  // Check N/A flags as soon as we know the record
+  if (found.rec) {
+    if (cartonRequired && found.rec.carton === 'NA') skipCartonCard();
+    if (eosRequired    && found.rec.eos    === 'NA') skipEOSCard();
+  }
+
+  const total = requiredTotal();
+  const remaining = total - scanCount;
+  document.getElementById('statusText').textContent =
+    'تم ' + scanCount + ' من ' + total + (remaining > 0 ? ' — باقي ' + remaining : '');
+  document.getElementById('scanInput').value = '';
+  document.getElementById('scanInput').focus();
+
+  if (scanCount >= total) {
+    document.getElementById('inputWrap').style.display = 'none';
+    setTimeout(evaluate, 300);
+  }
+}
+
+function evaluate() {
+  const issues = [];
+  let r1 = records.sn;
+  const r2 = records.carton;
+  const r3 = records.eos;
+
+  // If multiple DB rows share this SN prefix, pick the one matching scanned carton/eos
+  if (snCandidates && snCandidates.length > 1) {
+    const match = snCandidates.find(rec => {
+      // carton match: check both main code and alt code (after slash)
+      if (scanned.carton) {
+        const parts = rec.carton ? rec.carton.split('/') : [];
+        const mainC = parts[0] ? parts[0].trim() : '';
+        const altC  = parts[1] ? parts[1].trim() : '';
+        if (mainC === scanned.carton || altC === scanned.carton) return true;
+      }
+      if (r3 && r3.eos === rec.eos && rec.eos !== 'NA') return true;
+      return false;
+    });
+    if (match) r1 = records.sn = match;
+  }
+
+  // Check SN vs Carton — same DB row
+  if (r1 && r2 && cartonRequired) {
+    const sameRow = r1.sn === r2.sn;
+    if (!sameRow) {
+      issues.push('السيريال والكارتونة من منتجات مختلفة');
+      if (r1.model && r2.model && r1.model !== r2.model)
+        issues.push('السيريال: ' + (r1.model||'غير مسجل') + ' | الكارتونة: ' + (r2.model||'غير مسجل'));
+    }
+  }
+
+  // Check SN vs EOS
+  if (r1 && r3 && eosRequired) {
+    const sameRow = r1.sn === r3.sn && r1.eos === r3.eos;
+    if (r1.eos !== 'NA' && !sameRow) {
+      issues.push('بطاقة الطاقة من منتج مختلف عن السيريال');
+    }
+  }
+
+  // Check Carton vs EOS
+  if (r2 && r3 && cartonRequired && eosRequired) {
+    const sameRow = r2.sn === r3.sn && r2.eos === r3.eos;
+    if (r2.eos !== 'NA' && !sameRow) {
+      issues.push('بطاقة الطاقة من منتج مختلف عن الكارتونة');
+    }
+  }
+
+  // EOS scanned but not in DB
+  if (scanned.eos && !r3) {
+    if (r1 && r1.eos !== 'NA') {
+      issues.push('بطاقة الطاقة غير مطابقة للداتا بيز');
+    }
+  }
+
+  // Determine model name — empty = unknown, not an error
+  const model = (r1 && r1.model) || (r2 && r2.model) || (r3 && r3.model) || '';
+  const modelDisplay = model || 'موديل غير مسجل';
+
+  // Build OK message based on what was scanned
+  const scannedCount = requiredTotal();
+  let okMsg = '';
+  if (!cartonRequired && !eosRequired) okMsg = 'السيريال سليم (كارتون + بطاقة طاقة N/A)';
+  else if (!cartonRequired) okMsg = 'السيريال وبطاقة الطاقة متطابقان (كارتون N/A)';
+  else if (!eosRequired)    okMsg = 'السيريال والكارتونة متطابقان (بطاقة الطاقة N/A)';
+  else                      okMsg = 'الـ 3 استيكرات متطابقة — الوحدة سليمة';
+
+  const box = document.getElementById('resultBox');
+  box.style.display = 'block';
+  document.getElementById('resetBtn').style.display = 'block';
+  document.getElementById('statusBar').style.display = 'none';
+
+  if (issues.length === 0) {
+    box.className = 'result ok';
+    document.getElementById('resultIcon').textContent = '✅';
+    document.getElementById('resultVerdict').textContent = 'OK';
+    document.getElementById('resultModel').textContent = modelDisplay;
+    document.getElementById('resultMsg').textContent = okMsg;
+    playBeep(true);
+  } else {
+    box.className = 'result ng';
+    document.getElementById('resultIcon').textContent = '❌';
+    document.getElementById('resultVerdict').textContent = 'NG';
+    document.getElementById('resultModel').textContent = '';
+    const ul = document.createElement('ul');
+    ul.className = 'ng-issues';
+    issues.forEach(iss => { const li = document.createElement('li'); li.textContent = iss; ul.appendChild(li); });
+    const msg = document.getElementById('resultMsg');
+    msg.innerHTML = ''; msg.appendChild(ul);
+    playBeep(false);
+  }
+  box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function showToast(msg) {
+  const t = document.getElementById('warnToast');
+  t.textContent = msg; t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 2500);
+}
+
+function resetAll() {
+  scanned = { sn: null, carton: null, eos: null };
+  records = { sn: null, carton: null, eos: null };
+  snCandidates = null;
+  scanCount = 0;
+  eosRequired    = true;
+  cartonRequired = true;
+  for (let i = 0; i < 3; i++) {
+    document.getElementById('badge' + i).className = 'step-badge wait';
+    document.getElementById('badge' + i).textContent = (i + 1).toString();
+    const card = document.getElementById('card' + i);
+    card.className = 'scan-card';
+    card.style.opacity = '';
+    const v = document.getElementById('val' + i);
+    v.textContent = 'في انتظار السكان...';
+    v.className = 'card-value placeholder';
+    v.style.color = '';
+    document.getElementById('mod' + i).textContent = '';
+    document.getElementById('ps' + i).className = 'prog-seg' + (i === 0 ? ' waiting' : '');
+    document.getElementById('ps' + i).style.background = '';
+  }
+  document.getElementById('card1label').textContent = 'Scan 2 — Carton Label Barcode';
+  document.getElementById('card2label').textContent = 'Scan 3 — بطاقة الطاقة QR';
+  document.getElementById('resultBox').style.display = 'none';
+  document.getElementById('resultMsg').innerHTML = '';
+  document.getElementById('resultModel').textContent = '';
+  document.getElementById('resetBtn').style.display = 'none';
+  document.getElementById('inputWrap').style.display = 'block';
+  document.getElementById('statusBar').style.display = 'flex';
+  document.getElementById('statusBar').style.background = '';
+  document.getElementById('statusBar').style.color = '';
+  document.getElementById('statusText').textContent = 'جاهز — سكان أي من الاستيكرات';
+  document.getElementById('scanInput').value = '';
+  document.getElementById('scanInput').focus();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function playBeep(ok) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator(), gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = ok ? 880 : 220; osc.type = ok ? 'sine' : 'square';
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + (ok ? 0.4 : 0.6));
+    osc.start(); osc.stop(ctx.currentTime + (ok ? 0.4 : 0.6));
+  } catch (e) {}
+}
+
+// Camera
+function openCamera() {
+  document.getElementById('camOverlay').classList.add('open');
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } })
+    .then(stream => {
+      cameraStream = stream;
+      const video = document.getElementById('camVideo');
+      video.srcObject = stream; video.play();
+      if ('BarcodeDetector' in window) {
+        const det = new BarcodeDetector({ formats: ['qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'data_matrix'] });
+        const detect = async () => {
+          if (!cameraStream) return;
+          try { const codes = await det.detect(video); if (codes.length) { closeCamera(); setTimeout(() => handleScan(codes[0].rawValue), 100); return; } } catch (e) {}
+          animFrameId = requestAnimationFrame(detect);
+        };
+        animFrameId = requestAnimationFrame(detect);
+      } else {
+        document.querySelector('.cam-bottom').textContent = 'الكاميرا تعمل — جهازك لا يدعم القراءة التلقائية. استخدم Chrome 90+ على Android.';
+      }
+    })
+    .catch(err => { closeCamera(); alert('تعذر الكاميرا:\n' + err.message + '\nارفع الملف على Netlify للحل.'); });
+}
+
+function closeCamera() {
+  if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
+  if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+  document.getElementById('camOverlay').classList.remove('open');
+}
+
+// Tabs
+let adminUnlocked = false;
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', (i === 0 && tab === 'scanner') || (i === 1 && tab === 'admin')));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + tab).classList.add('active');
+  if (tab === 'admin' && adminUnlocked) renderTable();
+}
+
+// Admin
+const ADMIN_PASS = '1234';
+function checkPass() {
+  if (document.getElementById('adminPass').value === ADMIN_PASS) {
+    adminUnlocked = true;
+    document.getElementById('lockScreen').style.display = 'none';
+    document.getElementById('adminContent').style.display = 'block';
+    renderTable();
+  } else {
+    const e = document.getElementById('passError'); e.style.display = 'block';
+    setTimeout(() => e.style.display = 'none', 2000);
+  }
+}
+
+async function addModel() {
+  const sn = document.getElementById('newSN').value.trim();
+  const model = document.getElementById('newModel').value.trim();
+  const carton = document.getElementById('newCarton').value.trim();
+  const eos = document.getElementById('newEOS').value.trim() || 'NA';
+  const msg = document.getElementById('addMsg');
+  if (!sn || !carton) { showMsg(msg, 'error', 'SN Prefix و Carton مطلوبين!'); return; }
+
+  // Update only if BOTH SN and Carton match an existing row (editing same entry).
+  // If SN matches but carton differs, it's a new unit from the same order — add as new row.
+  const existingIdx = DB.findIndex(r => r[0] === sn && r[1] === carton);
+  const newRow = [sn, carton, eos, model];
+
+  showMsg(msg, 'success', '⏳ جاري الحفظ...');
+  const ok = await saveModelToSheet(newRow);
+  if (!ok) { showMsg(msg, 'error', '❌ فشل الحفظ — تحقق من الإنترنت'); return; }
+
+  if (existingIdx !== -1) {
+    DB[existingIdx] = newRow;
+    showMsg(msg, 'success', '✅ تم تحديث الموديل الموجود بنجاح!');
+  } else {
+    DB.push(newRow);
+    showMsg(msg, 'success', '✅ تمت الإضافة بنجاح!');
+  }
+  buildMaps();
+  document.getElementById('newSN').value = '';
+  document.getElementById('newModel').value = '';
+  document.getElementById('newCarton').value = '';
+  document.getElementById('newEOS').value = '';
+  renderTable();
+}
+
+function renderTable() {
+  const q = (document.getElementById('searchInput').value || '').toLowerCase();
+  const filtered = DB.filter(r => (r[0] || '').toLowerCase().includes(q) || (r[1] || '').toLowerCase().includes(q) || (r[3] || '').toLowerCase().includes(q));
+  document.getElementById('dbCount').textContent = filtered.length + ' من ' + DB.length + ' موديل';
+  const tbody = document.getElementById('dbTableBody');
+  tbody.innerHTML = '';
+  filtered.slice(0, 150).forEach((row, i) => {
+    const tr = document.createElement('tr');
+    const realIdx = DB.indexOf(row);
+    tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + row[0] + '</td><td>' + (row[3] || '—') + '</td><td>' + row[1] + '</td><td>' + (row[2] && row[2] !== 'NA' ? '✅' : '—') + '</td><td><button class="del-btn" onclick="deleteModel(' + realIdx + ')">🗑</button></td>';
+    tbody.appendChild(tr);
+  });
+}
+
+async function deleteModel(idx) {
+  if (!confirm('حذف هذا الموديل من الداتا بيز؟')) return;
+  const row = DB[idx];
+  const ok = await deleteModelFromSheet(row[0], row[1]);
+  if (!ok) { alert('❌ فشل الحذف — تحقق من الإنترنت'); return; }
+  DB.splice(idx, 1);
+  buildMaps();
+  renderTable();
+}
+
+function showMsg(el, type, text) { el.className = 'msg-box ' + type; el.textContent = text; el.style.display = 'block'; setTimeout(() => el.style.display = 'none', 3000); }
+
+// Input
+const inp = document.getElementById('scanInput');
+inp.addEventListener('keydown', e => { if (e.key === 'Enter') { const v = inp.value.trim(); inp.value = ''; if (v) handleScan(v); } });
+inp.addEventListener('input', e => { const v = inp.value; if (v.includes('\n') || v.includes('\r')) { const c = v.replace(/[\r\n]/g, '').trim(); inp.value = ''; if (c) handleScan(c); } });
+inp.focus();
+
+// Load database from Google Sheet on startup
+updateDBStatus();
+loadDB();
+</script>
+</body>
+</html>
