@@ -289,6 +289,22 @@ async function deleteModelFromSheet(sn, carton) {
   }
 }
 
+// Checks whether this full serial number was scanned before, and logs it if not.
+// Returns { ok, duplicate, previousTimestamp, previousModel } or { ok:false } on network failure.
+async function checkAndLogScan(fullSerial, model) {
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'checkAndLogScan', fullSerial, model })
+    });
+    const json = await res.json();
+    return json;
+  } catch (e) {
+    return { ok: false };
+  }
+}
+
 // Build maps
 let snMap = {}, cartonMap = {}, eosMap = {};
 
@@ -478,11 +494,11 @@ function handleScan(raw) {
 
   if (scanCount >= total) {
     document.getElementById('inputWrap').style.display = 'none';
-    setTimeout(evaluate, 300);
+    setTimeout(() => { evaluate(); }, 300);
   }
 }
 
-function evaluate() {
+async function evaluate() {
   const issues = [];
   let r1 = records.sn;
   let r2 = records.carton;
@@ -564,6 +580,25 @@ function evaluate() {
   box.style.display = 'block';
   document.getElementById('resetBtn').style.display = 'block';
   document.getElementById('statusBar').style.display = 'none';
+
+  // Duplicate-scan check — only when the unit otherwise passed (no point checking a unit that's already NG)
+  let dupInfo = null;
+  if (issues.length === 0 && scanned.sn) {
+    document.getElementById('resultIcon').textContent = '⏳';
+    document.getElementById('resultVerdict').textContent = '...';
+    document.getElementById('resultModel').textContent = '';
+    document.getElementById('resultMsg').textContent = 'جاري التحقق من التكرار...';
+    box.className = 'result';
+    box.style.display = 'block';
+    box.style.background = '#f0f2f5';
+    box.style.border = '2px solid #ddd';
+    const res = await checkAndLogScan(scanned.sn, model);
+    if (res && res.ok && res.duplicate) {
+      dupInfo = res;
+      issues.push('⚠ هذا السيريال تم سكانه من قبل! (الوقت السابق: ' + (res.previousTimestamp || 'غير معروف') + ')');
+    }
+    // If res.ok is false (network failure), we silently allow through — don't block production over connectivity issues.
+  }
 
   if (issues.length === 0) {
     box.className = 'result ok';
