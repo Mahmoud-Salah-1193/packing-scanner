@@ -212,8 +212,8 @@ tr:hover td{background:#f8fbff}
 
 <div class="cam-overlay" id="camOverlay">
   <div class="cam-top"><span class="cam-top-title">سكان الكود بالكاميرا</span><button class="cam-close-btn" onclick="closeCamera()">✕</button></div>
-  <div class="cam-video-area"><video id="camVideo" autoplay playsinline muted></video><div class="cam-viewfinder"></div><div class="scan-line"></div></div>
-  <div class="cam-bottom">وجّه الكاميرا على الكود — سيُقرأ تلقائياً</div>
+  <div class="cam-video-area" id="camVideoArea"><video id="camVideo" autoplay playsinline muted></video><div class="cam-viewfinder"></div><div class="scan-line"></div></div>
+  <div class="cam-bottom">وجّه الكاميرا على الكود — اضغط على الشاشة لو الصورة غير واضحة لإعادة الفوكس</div>
 </div>
 
 <script>
@@ -681,11 +681,50 @@ function playBeep(ok) {
 // Camera
 function openCamera() {
   document.getElementById('camOverlay').classList.add('open');
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } })
+  navigator.mediaDevices.getUserMedia({
+    video: {
+      facingMode: { ideal: 'environment' },
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+      // Hint the browser to use continuous autofocus where supported (helps close-range barcode reading)
+      advanced: [{ focusMode: 'continuous' }]
+    }
+  })
     .then(stream => {
       cameraStream = stream;
       const video = document.getElementById('camVideo');
       video.srcObject = stream; video.play();
+
+      // Try to explicitly enable continuous autofocus + a slight zoom if the device supports it
+      // (some Android devices default to single-shot focus which is slow up close)
+      const track = stream.getVideoTracks()[0];
+      if (track && track.getCapabilities) {
+        try {
+          const caps = track.getCapabilities();
+          const constraints = {};
+          if (caps.focusMode && caps.focusMode.includes('continuous')) constraints.focusMode = 'continuous';
+          if (caps.zoom && caps.zoom.max > 1) constraints.zoom = Math.min(1.5, caps.zoom.max);
+          if (Object.keys(constraints).length) track.applyConstraints({ advanced: [constraints] }).catch(() => {});
+        } catch (e) {}
+      }
+
+      // Tap-to-refocus: re-applying the focusMode constraint nudges some Android cameras
+      // to re-run autofocus immediately, which helps a lot on close-up real cartons.
+      const videoArea = document.getElementById('camVideoArea');
+      if (videoArea) {
+        videoArea.onclick = () => {
+          if (track && track.getCapabilities) {
+            try {
+              const caps = track.getCapabilities();
+              if (caps.focusMode) {
+                track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] })
+                  .catch(() => track.applyConstraints({ advanced: [{ focusMode: 'manual' }] }).catch(() => {}));
+              }
+            } catch (e) {}
+          }
+        };
+      }
+
       if ('BarcodeDetector' in window) {
         const det = new BarcodeDetector({ formats: ['qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'data_matrix'] });
         const detect = async () => {
