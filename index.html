@@ -306,15 +306,18 @@ function buildMaps() {
 
     // Carton map — supports "MAIN/ALT" format and plain codes
     // e.g. "5414529018920/000026" → register both keys
+    // A single carton barcode can be shared by multiple different SNs/models,
+    // so each key maps to an ARRAY of records, not a single record.
     if (carton && carton !== 'NA' && !carton.startsWith('http')) {
       if (carton.includes('/')) {
         const parts = carton.split('/');
         const main = parts[0].trim();
         const alt  = parts[1].trim();
-        if (main) cartonMap[main] = rec;
-        if (alt)  cartonMap[alt]  = rec;
+        if (main) { if (!cartonMap[main]) cartonMap[main] = []; cartonMap[main].push(rec); }
+        if (alt)  { if (!cartonMap[alt])  cartonMap[alt]  = []; cartonMap[alt].push(rec); }
       } else {
-        cartonMap[carton] = rec;
+        if (!cartonMap[carton]) cartonMap[carton] = [];
+        cartonMap[carton].push(rec);
       }
     }
 
@@ -337,7 +340,9 @@ function findBySN(val) {
 }
 
 function findByCarton(val) {
-  return cartonMap[val] ? { slot: 'carton', rec: cartonMap[val] } : null;
+  const recs = cartonMap[val];
+  if (!recs || !recs.length) return null;
+  return { slot: 'carton', rec: recs[0], recs };
 }
 
 function findByEOS(val) {
@@ -362,6 +367,7 @@ function findByEOS(val) {
 let scanned = { sn: null, carton: null, eos: null };
 let records = { sn: null, carton: null, eos: null };
 let snCandidates = null;
+let cartonCandidates = null;
 let scanCount = 0;
 let eosRequired    = true;
 let cartonRequired = true;
@@ -442,6 +448,7 @@ function handleScan(raw) {
   scanned[slot] = val;
   records[slot] = found.rec;
   if (slot === 'sn' && found.recs) snCandidates = found.recs;
+  if (slot === 'carton' && found.recs) cartonCandidates = found.recs;
   scanCount++;
 
   // Update UI for scanned card
@@ -478,7 +485,7 @@ function handleScan(raw) {
 function evaluate() {
   const issues = [];
   let r1 = records.sn;
-  const r2 = records.carton;
+  let r2 = records.carton;
   const r3 = records.eos;
 
   // If multiple DB rows share this SN prefix, pick the one matching scanned carton/eos
@@ -495,6 +502,17 @@ function evaluate() {
       return false;
     });
     if (match) r1 = records.sn = match;
+  }
+
+  // If multiple DB rows share this carton barcode (carton shared across different SNs/models),
+  // pick the one whose SN prefix actually matches the scanned serial number.
+  if (cartonCandidates && cartonCandidates.length > 1) {
+    const match = cartonCandidates.find(rec => {
+      if (scanned.sn && rec.sn && scanned.sn.startsWith(rec.sn)) return true;
+      if (r3 && r3.eos === rec.eos && rec.eos !== 'NA') return true;
+      return false;
+    });
+    if (match) r2 = records.carton = match;
   }
 
   // Check SN vs Carton — same DB row
@@ -579,6 +597,7 @@ function resetAll() {
   scanned = { sn: null, carton: null, eos: null };
   records = { sn: null, carton: null, eos: null };
   snCandidates = null;
+  cartonCandidates = null;
   scanCount = 0;
   eosRequired    = true;
   cartonRequired = true;
