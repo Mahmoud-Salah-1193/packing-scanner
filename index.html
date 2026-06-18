@@ -55,6 +55,15 @@ h1{font-size:19px;font-weight:700;color:#1a1a2e}
 .result-msg{font-size:13px;margin-top:8px;line-height:1.6}
 .result.ok .result-msg{color:#2e7d32}
 .result.ng .result-msg{color:#c62828}
+.fullscreen-verdict{display:none;position:fixed;inset:0;z-index:9999;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px}
+.fullscreen-verdict.show{display:flex}
+.fullscreen-verdict.ok-fs{background:#34a853}
+.fullscreen-verdict.ng-fs{background:#ea4335;cursor:pointer}
+.fs-icon{font-size:120px;line-height:1;margin-bottom:16px}
+.fs-text{font-size:64px;font-weight:800;color:#fff;letter-spacing:-1px}
+.fs-model{font-size:20px;font-weight:700;color:#fff;margin-top:12px;opacity:.95}
+.fs-tap-hint{font-size:15px;color:#fff;opacity:.85;margin-top:28px;display:none}
+.fullscreen-verdict.ng-fs .fs-tap-hint{display:block}
 .ng-issues{list-style:none;margin-top:8px;padding:0;text-align:right}
 .ng-issues li{font-size:13px;padding:4px 0;border-bottom:1px solid rgba(0,0,0,.05)}
 .ng-issues li::before{content:"⚠ "}
@@ -109,7 +118,6 @@ tr:hover td{background:#f8fbff}
       <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h2v2h-2z"/><path d="M18 14h3v2h-3z"/><path d="M14 18h2v3h-2z"/><path d="M18 18h3v3h-3z"/></svg>
     </div>
     <h1>Packing Line Scanner</h1>
-    <p class="subtitle">OQC — Label Verification v4.1</p>
   </div>
 
   <div class="tabs">
@@ -174,6 +182,13 @@ tr:hover td{background:#f8fbff}
     </div>
     <button class="reset-btn" id="resetBtn" onclick="resetAll()">↺ &nbsp; سكان وحدة جديدة</button>
     <div class="footer">OQC Packing Line — v4.3 — Offline</div>
+  </div>
+
+  <div class="fullscreen-verdict" id="fsVerdict" onclick="dismissFsVerdict()">
+    <div class="fs-icon" id="fsIcon"></div>
+    <div class="fs-text" id="fsText"></div>
+    <div class="fs-model" id="fsModel"></div>
+    <div class="fs-tap-hint" id="fsTapHint">اضغط في أي مكان للمتابعة</div>
   </div>
 
   <div class="page" id="page-admin">
@@ -607,6 +622,7 @@ async function evaluate() {
     document.getElementById('resultModel').textContent = modelDisplay;
     document.getElementById('resultMsg').textContent = okMsg;
     playBeep(true);
+    showFsVerdict(true, modelDisplay);
   } else {
     box.className = 'result ng';
     document.getElementById('resultIcon').textContent = '❌';
@@ -618,8 +634,35 @@ async function evaluate() {
     const msg = document.getElementById('resultMsg');
     msg.innerHTML = ''; msg.appendChild(ul);
     playBeep(false);
+    showFsVerdict(false, '');
   }
   box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// Full-screen OK/NG overlay.
+// OK: solid green, auto-dismisses after 2 seconds and automatically starts a new scan (no tap needed).
+// NG: solid red, stays on screen until the user taps it; tapping then dismisses it and starts a new scan.
+let fsAutoDismissTimer = null;
+
+function showFsVerdict(isOk, modelDisplay) {
+  const el = document.getElementById('fsVerdict');
+  document.getElementById('fsIcon').textContent = isOk ? '✓' : '✕';
+  document.getElementById('fsText').textContent = isOk ? 'OK' : 'NG';
+  document.getElementById('fsModel').textContent = isOk ? (modelDisplay || '') : '';
+  el.className = 'fullscreen-verdict show ' + (isOk ? 'ok-fs' : 'ng-fs');
+
+  if (fsAutoDismissTimer) clearTimeout(fsAutoDismissTimer);
+  if (isOk) {
+    fsAutoDismissTimer = setTimeout(() => { dismissFsVerdict(); }, 2000);
+  }
+}
+
+function dismissFsVerdict() {
+  const el = document.getElementById('fsVerdict');
+  if (!el.classList.contains('show')) return; // avoid double-trigger
+  if (fsAutoDismissTimer) { clearTimeout(fsAutoDismissTimer); fsAutoDismissTimer = null; }
+  el.className = 'fullscreen-verdict';
+  resetAll(); // automatically reopen the scanner for the next unit, no extra tap needed
 }
 
 function showToast(msg) {
