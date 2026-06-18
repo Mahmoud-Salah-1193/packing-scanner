@@ -649,7 +649,7 @@ let fsAutoDismissTimer = null;
 
 function showFsVerdict(isOk, modelDisplay, issues) {
   const el = document.getElementById('fsVerdict');
-  document.getElementById('fsIcon').textContent = isOk ? '✓' : '✕';
+  document.getElementById('fsIcon').textContent = isOk ? '✓' : '';
   document.getElementById('fsText').textContent = isOk ? 'OK' : 'NG';
   document.getElementById('fsModel').textContent = isOk ? (modelDisplay || '') : '';
 
@@ -675,6 +675,7 @@ function dismissFsVerdict() {
   const el = document.getElementById('fsVerdict');
   if (!el.classList.contains('show')) return; // avoid double-trigger
   if (fsAutoDismissTimer) { clearTimeout(fsAutoDismissTimer); fsAutoDismissTimer = null; }
+  stopAlarmSiren();
   el.className = 'fullscreen-verdict';
   resetAll(); // automatically reopen the scanner for the next unit, no extra tap needed
 }
@@ -686,6 +687,7 @@ function showToast(msg) {
 }
 
 function resetAll() {
+  stopAlarmSiren();
   scanned = { sn: null, carton: null, eos: null };
   records = { sn: null, carton: null, eos: null };
   snCandidates = null;
@@ -723,6 +725,10 @@ function resetAll() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+let alarmCtx = null;
+let alarmNodes = null;
+let alarmIntervalId = null;
+
 function playBeep(ok) {
   try {
     if (ok) {
@@ -736,20 +742,48 @@ function playBeep(ok) {
       osc.start(); osc.stop(ctx.currentTime + 0.4);
       speakText('Okay');
     } else {
-      // Urgent repeating alarm tone (3 short blasts) for NG
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const blasts = 3;
-      for (let i = 0; i < blasts; i++) {
-        const osc = ctx.createOscillator(), gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.frequency.value = 220; osc.type = 'square';
-        const startAt = ctx.currentTime + i * 0.35;
-        gain.gain.setValueAtTime(0.35, startAt);
-        gain.gain.exponentialRampToValueAtTime(0.001, startAt + 0.25);
-        osc.start(startAt); osc.stop(startAt + 0.25);
-      }
+      startAlarmSiren();
     }
   } catch (e) {}
+}
+
+// Continuous siren-style alarm (frequency sweeps up/down like a fire/hospital alarm).
+// Keeps looping at full volume until stopAlarmSiren() is called (when the NG screen is dismissed).
+function startAlarmSiren() {
+  stopAlarmSiren(); // make sure no previous siren is still running
+  try {
+    alarmCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = alarmCtx.createOscillator();
+    const gain = alarmCtx.createGain();
+    osc.type = 'sawtooth';
+    osc.connect(gain); gain.connect(alarmCtx.destination);
+    gain.gain.setValueAtTime(0.5, alarmCtx.currentTime);
+    osc.start();
+    alarmNodes = { osc, gain };
+
+    // Sweep frequency up and down repeatedly (classic siren effect)
+    let rising = true;
+    let freq = 500;
+    alarmIntervalId = setInterval(() => {
+      if (!alarmNodes) return;
+      freq += rising ? 60 : -60;
+      if (freq >= 1100) rising = false;
+      if (freq <= 500) rising = true;
+      alarmNodes.osc.frequency.setValueAtTime(freq, alarmCtx.currentTime);
+    }, 40);
+  } catch (e) {}
+}
+
+function stopAlarmSiren() {
+  if (alarmIntervalId) { clearInterval(alarmIntervalId); alarmIntervalId = null; }
+  if (alarmNodes) {
+    try { alarmNodes.osc.stop(); } catch (e) {}
+    alarmNodes = null;
+  }
+  if (alarmCtx) {
+    try { alarmCtx.close(); } catch (e) {}
+    alarmCtx = null;
+  }
 }
 
 // Speaks short text aloud using the browser's built-in speech synthesis (no internet/API needed).
